@@ -1,0 +1,9 @@
+.bms-card{border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff}
+.bms-poster{width:100%;height:200px;background:#cbd5e1;border-radius:6px}
+.bms-btn{border-radius:20px}
+
+/* Dark mode */
+:root[data-theme='dark'] body{background:#0b0f14;color:#e2e8f0}
+:root[data-theme='dark'] .navbar{background:#0f172a!important}
+:root[data-theme='dark'] .bms-card{background:#111827;border-color:#243245}
+

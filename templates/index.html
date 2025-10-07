@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Movie Ticket Booking</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body class="bg-light">
+	<div class="container py-4">
+		<h1 class="mb-4">Movie Ticket Booking</h1>
+		<div class="row g-3">
+			<div class="col-md-4">
+				<div class="card">
+					<div class="card-header">Auth</div>
+					<div class="card-body">
+						<div class="mb-2">
+							<input id="username" class="form-control" placeholder="Username" />
+						</div>
+						<div class="mb-2">
+							<input id="password" type="password" class="form-control" placeholder="Password" />
+						</div>
+						<div class="d-flex gap-2">
+							<button id="btn-signup" class="btn btn-outline-primary btn-sm">Signup</button>
+							<button id="btn-login" class="btn btn-primary btn-sm">Login</button>
+						</div>
+						<div class="mt-2 small text-muted">Token: <span id="token-preview"></span></div>
+					</div>
+				</div>
+				<div class="card mt-3">
+					<div class="card-header">My Bookings</div>
+					<div class="card-body">
+						<ul id="my-bookings" class="list-group"></ul>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-8">
+				<div class="card">
+					<div class="card-header d-flex justify-content-between align-items-center">
+						<span>Movies</span>
+						<button id="btn-load-movies" class="btn btn-secondary btn-sm">Reload</button>
+					</div>
+					<div class="card-body">
+						<div id="movies" class="list-group"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		const apiBase = '';
+		let accessToken = '';
+
+		function setToken(tok){
+			accessToken = tok || '';
+			document.getElementById('token-preview').textContent = accessToken ? accessToken.slice(0,16)+'…' : '';
+		}
+
+		async function api(path, opts={}){
+			const headers = { 'Content-Type': 'application/json', ...(opts.headers||{}) };
+			if(accessToken){ headers['Authorization'] = `Bearer ${accessToken}`; }
+			const res = await fetch(apiBase + path, { ...opts, headers });
+			if(!res.ok){
+				let msg = await res.text();
+				throw new Error(msg || res.statusText);
+			}
+			const ct = res.headers.get('content-type') || '';
+			return ct.includes('application/json') ? res.json() : res.text();
+		}
+
+		async function loadMovies(){
+			const list = document.getElementById('movies');
+			list.innerHTML = '';
+			const movies = await api('/movies/');
+			for(const m of movies){
+				const item = document.createElement('div');
+				item.className = 'list-group-item';
+				item.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><strong>${m.title}</strong> · ${m.duration_minutes} min</div><button class="btn btn-sm btn-outline-secondary">Shows</button></div><div class="mt-2 shows"></div>`;
+				item.querySelector('button').onclick = async ()=>{
+					const showsWrap = item.querySelector('.shows');
+					showsWrap.innerHTML = 'Loading…';
+					const shows = await api(`/movies/${m.id}/shows/`);
+					showsWrap.innerHTML = shows.map(s=>`<div class='d-flex gap-2 align-items-center my-1'>
+						<span>${new Date(s.date_time).toLocaleString()} — ${s.screen_name} (capacity ${s.total_seats})</span>
+						<input type='number' min='1' max='${s.total_seats}' value='1' class='form-control form-control-sm' style='width:90px' />
+						<button class='btn btn-sm btn-primary'>Book</button>
+					</div>`).join('');
+					[...showsWrap.querySelectorAll('button')].forEach((btn,idx)=>{
+						btn.onclick = async ()=>{
+							const input = showsWrap.querySelectorAll('input')[idx];
+							const seat = parseInt(input.value, 10) || 1;
+							await api(`/shows/${shows[idx].id}/book/`, { method:'POST', body: JSON.stringify({ seat_number: seat }) });
+							alert('Booked!');
+							loadMyBookings();
+						};
+					});
+				};
+				list.appendChild(item);
+			}
+		}
+
+		async function loadMyBookings(){
+			if(!accessToken){ document.getElementById('my-bookings').innerHTML='Login first'; return; }
+			const ul = document.getElementById('my-bookings');
+			ul.innerHTML = '';
+			const bookings = await api('/my-bookings/');
+			for(const b of bookings){
+				const li = document.createElement('li');
+				li.className='list-group-item d-flex justify-content-between align-items-center';
+				li.innerHTML = `<span>${b.show.movie.title} — ${new Date(b.show.date_time).toLocaleString()} — seat ${b.seat_number} — ${b.status}</span><button class='btn btn-sm btn-outline-danger'>Cancel</button>`;
+				li.querySelector('button').onclick = async ()=>{
+					await api(`/bookings/${b.id}/cancel/`, { method: 'POST' });
+					loadMyBookings();
+				};
+				ul.appendChild(li);
+			}
+		}
+
+		document.getElementById('btn-signup').onclick = async ()=>{
+			const username = document.getElementById('username').value.trim();
+			const password = document.getElementById('password').value;
+			await api('/signup', { method:'POST', body: JSON.stringify({ username, password }) });
+			alert('Signed up');
+		};
+		document.getElementById('btn-login').onclick = async ()=>{
+			const username = document.getElementById('username').value.trim();
+			const password = document.getElementById('password').value;
+			const data = await api('/login', { method:'POST', body: JSON.stringify({ username, password }) });
+			setToken(data.access);
+			loadMyBookings();
+		};
+
+		document.getElementById('btn-load-movies').onclick = loadMovies;
+		loadMovies();
+	</script>
+</body>
+</html>
+
+
